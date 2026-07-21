@@ -9,6 +9,24 @@ REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 ADDONS_XML = os.path.join(REPO_DIR, 'addons.xml')
 ADDONS_MD5 = os.path.join(REPO_DIR, 'addons.xml.md5')
 
+
+def find_zip_files(directory):
+    """Recursively find all addon ZIP files, excluding repo/module zips."""
+    zips = []
+    for root, dirs, files in os.walk(directory):
+        # Skip .git directory
+        if '.git' in root:
+            continue
+        for fname in files:
+            if not fname.endswith('.zip'):
+                continue
+            if fname.startswith('repository.'):
+                continue
+            if fname.startswith('script.module.'):
+                continue
+            zips.append(os.path.join(root, fname))
+    return sorted(zips)
+
 def strip_xml_declaration(content):
     """Remove <?xml ...?> declaration from content."""
     lines = content.split('\n')
@@ -29,20 +47,11 @@ def get_addon_xml_from_zip(zip_path):
 
 def main():
     entries = []
-    
-    for fname in sorted(os.listdir(REPO_DIR)):
-        if not fname.endswith('.zip'):
-            continue
-        if fname.startswith('script.module.slyguy'):
-            print(f"  SKIP (not for repo): {fname}")
-            continue
-        if fname.startswith('repository.cleanui'):
-            print(f"  SKIP (repo itself): {fname}")
-            continue
-        
-        zip_path = os.path.join(REPO_DIR, fname)
-        print(f"  Processing: {fname}")
-        
+
+    for zip_path in find_zip_files(REPO_DIR):
+        rel_path = os.path.relpath(zip_path, REPO_DIR)
+        print(f"  Processing: {rel_path}")
+
         content = get_addon_xml_from_zip(zip_path)
         if content:
             # Strip any leading/trailing whitespace

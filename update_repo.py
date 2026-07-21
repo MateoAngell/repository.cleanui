@@ -21,6 +21,24 @@ import tempfile
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def find_zip_files(directory):
+    """Recursively find all addon ZIP files, excluding repo/module zips."""
+    zips = []
+    for root, dirs, files in os.walk(directory):
+        if '.git' in root:
+            continue
+        for fname in files:
+            if not fname.endswith('.zip'):
+                continue
+            if fname.startswith('repository.'):
+                continue
+            if fname.startswith('script.module.'):
+                continue
+            zips.append(os.path.join(root, fname))
+    return sorted(zips)
+
+
 def get_addon_info(zip_path):
     """Extract addon id and version from an addon ZIP."""
     with zipfile.ZipFile(zip_path) as zf:
@@ -33,18 +51,11 @@ def get_addon_info(zip_path):
                 return addon_id, version, content
     return None, None, None
 
+
 def generate_repo_files():
     """Regenerate addons.xml and addons.xml.md5."""
     entries = []
-    for fname in sorted(os.listdir(REPO_DIR)):
-        if not fname.endswith('.zip'):
-            continue
-        if fname.startswith('repository.cleanui'):
-            continue
-        if fname.startswith('script.module.'):
-            continue
-
-        zip_path = os.path.join(REPO_DIR, fname)
+    for zip_path in find_zip_files(REPO_DIR):
         with zipfile.ZipFile(zip_path) as zf:
             for name in zf.namelist():
                 if name.endswith('/addon.xml'):
