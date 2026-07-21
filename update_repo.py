@@ -43,12 +43,16 @@ def generate_repo_files():
             continue
         if fname.startswith('script.module.'):
             continue
-        
+
         zip_path = os.path.join(REPO_DIR, fname)
         with zipfile.ZipFile(zip_path) as zf:
             for name in zf.namelist():
                 if name.endswith('/addon.xml'):
-                    entries.append(zf.read(name).decode('utf-8'))
+                    content = zf.read(name).decode('utf-8')
+                    # Strip XML declaration to avoid duplicates
+                    lines = content.split('\n')
+                    cleaned = [l for l in lines if not l.strip().startswith('<?xml')]
+                    entries.append('\n'.join(cleaned).strip())
                     break
     
     xml_header = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
