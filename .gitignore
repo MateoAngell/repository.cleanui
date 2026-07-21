@@ -1,0 +1,4 @@
+*.pyc
+__pycache__/
+script.module.slyguy.mod.zip
+addons_xml.zip

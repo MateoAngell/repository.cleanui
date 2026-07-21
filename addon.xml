@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="repository.cleanui" name="CleanUI Repository" version="1.0.0" provider-name="MateoAngell">
+  <requires>
+    <import addon="xbmc.addon" version="12.0.0"/>
+  </requires>
+  <extension point="xbmc.addon.repository">
+    <dir>
+      <info compressed="false">https://mateoangell.github.io/repository.cleanui/addons.xml</info>
+      <checksum>https://mateoangell.github.io/repository.cleanui/addons.xml.md5</checksum>
+      <datadir zip="https://mateoangell.github.io/repository.cleanui/">https://mateoangell.github.io/repository.cleanui/</datadir>
+    </dir>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en">CleanUI Repository</summary>
+    <description lang="en">CleanUI Repository - Disney+, HBO Max y más con interfaz visual mejorada para Kodi. Mantenimiento y actualizaciones automáticas.</description>
+    <description lang="es">CleanUI Repository - Disney+, HBO Max y más con interfaz visual mejorada para Kodi. Mantenimiento y actualizaciones automáticas.</description>
+    <assets>
+      <icon>icon.png</icon>
+      <fanart>fanart.jpg</fanart>
+    </assets>
+  </extension>
+</addon>

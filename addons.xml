@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addons>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="slyguy.disney.plus.cleanui" name="Disney+" provider-name="Slyguy + TU_NOMBRE" version="0.1.32">
+  <requires>
+    <import addon="script.module.slyguy" version="0.0.1"/>
+  </requires>
+  <extension point="xbmc.python.pluginsource" library="default.py" provides="video">
+    <provides>video</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <description lang="en">Disney+ Clean UI - A visually enhanced interface for Disney+ content in Kodi.
+
+Disney+ is the exclusive home for your favorite movies and TV shows from Disney, Pixar, Marvel, Star Wars, and National Geographic.</description>
+    <description lang="it">Disney+ Clean UI - Un'interfaccia visivamente migliorata per i contenuti Disney+ su Kodi.
+
+Disney+ è la casa esclusiva per i tuoi film e programmi TV preferiti di Disney, Pixar, Marvel, Star Wars e National Geographic.</description>
+    <description lang="fr">Disney+ Clean UI - Une interface visuellement améliorée pour le contenu Disney+ dans Kodi.
+
+Disney+ est la destination exclusive de vos films et séries TV préférés des univers Disney, Pixar, Marvel, Star Wars et National Geographic.</description>
+    <description lang="es">Disney+ Clean UI - Una interfaz visualmente mejorada para el contenido de Disney+ en Kodi.
+
+Disney+ es el hogar exclusivo de tus películas y programas de TV favoritos de Disney, Pixar, Marvel, Star Wars y National Geographic.</description>
+    <reuselanguageinvoker>true</reuselanguageinvoker>
+    <assets>
+      <icon>icon.png</icon>
+      <fanart>fanart.jpg</fanart>
+    </assets>
+  </extension>
+</addon>
+
+</addons>
