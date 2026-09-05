@@ -1,89 +1,62 @@
 #!/usr/bin/env python3
-"""Generate addons.xml and addons.xml.md5 for Kodi repository."""
+"""Build the Kodi index, choosing one numeric release per add-on.
+
+Packages are kept for rollback; active releases are copied into the canonical
+addon-id directory. Hash the exact UTF-8 bytes written, including on Windows.
+"""
 import hashlib
-import os
-import zipfile
+from pathlib import Path
+import re
+import shutil
 import xml.etree.ElementTree as ET
+import zipfile
 
-REPO_DIR = os.path.dirname(os.path.abspath(__file__))
-ADDONS_XML = os.path.join(REPO_DIR, 'addons.xml')
-ADDONS_MD5 = os.path.join(REPO_DIR, 'addons.xml.md5')
+REPO_DIR = Path(__file__).resolve().parent
 
 
-def find_zip_files(directory):
-    """Recursively find all addon ZIP files, excluding repo/module zips."""
-    zips = []
-    for root, dirs, files in os.walk(directory):
-        # Skip .git directory
-        if '.git' in root:
+def package_info(path):
+    with zipfile.ZipFile(path) as archive:
+        candidates = [n for n in archive.namelist() if n.count('/') == 1 and n.endswith('/addon.xml')]
+        if len(candidates) != 1:
+            raise ValueError('Expected one root addon.xml: ' + str(path))
+        data = archive.read(candidates[0])
+        manifest = ET.fromstring(data)
+        addon_id, version = manifest.get('id'), manifest.get('version')
+        if not addon_id or not re.fullmatch(r'[A-Za-z0-9_.-]+', addon_id):
+            raise ValueError('Invalid addon ID')
+        if not version or not re.fullmatch(r'\d+(?:\.\d+)*', version):
+            raise ValueError('Expected numeric release version: ' + str(version))
+        return addon_id, version, manifest
+
+
+def generate(directory=REPO_DIR):
+    directory = Path(directory)
+    latest = {}
+    for path in sorted(directory.rglob('*.zip')):
+        if '.git' in path.parts or path.name.startswith(('repository.', 'script.module.')):
             continue
-        for fname in files:
-            if not fname.endswith('.zip'):
-                continue
-            if fname.startswith('repository.'):
-                continue
-            if fname.startswith('script.module.'):
-                continue
-            zips.append(os.path.join(root, fname))
-    return sorted(zips)
+        addon_id, version, manifest = package_info(path)
+        key = tuple(map(int, version.split('.')))
+        if addon_id not in latest or key > latest[addon_id][0]:
+            latest[addon_id] = (key, path, manifest, version)
+    if not latest:
+        raise ValueError('No add-on packages found')
+    index = ET.Element('addons')
+    for addon_id, (_, source, manifest, version) in sorted(latest.items()):
+        target_dir = directory / addon_id
+        target_dir.mkdir(exist_ok=True)
+        target = target_dir / (addon_id + '-' + version + '.zip')
+        if source.resolve() != target.resolve():
+            shutil.copy2(source, target)
+        (target_dir / 'addon.xml').write_bytes(ET.tostring(manifest, encoding='utf-8'))
+        index.append(manifest)
+    ET.indent(index, space='  ')
+    data = ET.tostring(index, encoding='utf-8', xml_declaration=True) + b'\n'
+    (directory / 'addons.xml').write_bytes(data)
+    digest = hashlib.md5(data).hexdigest()
+    (directory / 'addons.xml.md5').write_text(digest, encoding='ascii')
+    return digest
 
-def strip_xml_declaration(content):
-    """Remove <?xml ...?> declaration from content."""
-    lines = content.split('\n')
-    cleaned = [l for l in lines if not l.strip().startswith('<?xml')]
-    return '\n'.join(cleaned)
-
-def get_addon_xml_from_zip(zip_path):
-    """Extract addon.xml content from an addon ZIP."""
-    try:
-        with zipfile.ZipFile(zip_path) as zf:
-            for name in zf.namelist():
-                if name.endswith('/addon.xml'):
-                    content = zf.read(name).decode('utf-8')
-                    return strip_xml_declaration(content)
-    except Exception as e:
-        print(f"  ERROR reading {zip_path}: {e}")
-    return None
-
-def main():
-    entries = []
-
-    for zip_path in find_zip_files(REPO_DIR):
-        rel_path = os.path.relpath(zip_path, REPO_DIR)
-        print(f"  Processing: {rel_path}")
-
-        content = get_addon_xml_from_zip(zip_path)
-        if content:
-            # Strip any leading/trailing whitespace
-            content = content.strip()
-            entries.append(content)
-            # Verify it's valid XML
-            try:
-                ET.fromstring(content)
-                print(f"    -> addon.xml OK")
-            except ET.ParseError as e:
-                print(f"    -> INVALID addon.xml: {e}")
-        else:
-            print(f"    -> NO addon.xml found")
-    
-    if not entries:
-        print("\nNo addon entries found!")
-        return 1
-    
-    xml_header = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-    addons_xml_content = xml_header + '<addons>\n' + '\n'.join(entries) + '\n</addons>\n'
-    
-    with open(ADDONS_XML, 'w', encoding='utf-8') as f:
-        f.write(addons_xml_content)
-    
-    md5_hash = hashlib.md5(addons_xml_content.encode('utf-8')).hexdigest()
-    with open(ADDONS_MD5, 'w') as f:
-        f.write(md5_hash)
-    
-    print(f"\nDone!")
-    print(f"  {ADDONS_XML}")
-    print(f"  {ADDONS_MD5} = {md5_hash}")
-    return 0
 
 if __name__ == '__main__':
-    exit(main())
+    print(generate())
