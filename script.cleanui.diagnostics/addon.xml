@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon id="script.cleanui.diagnostics" name="Clean UI Diagnóstico" version="0.1.0" provider-name="Clean UI">
+  <requires><import addon="xbmc.python" version="3.0.0" /></requires>
+  <extension point="xbmc.python.script" library="default.py"><provides>executable</provides></extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="es">Diagnóstico privado de Kodi y reproducción</summary>
+    <description lang="es">Registro manual, limitado y local. Exporta informes saneados; no cambia audio, búferes ni credenciales. No envía información a Internet.</description>
+    <platform>all</platform><license>MIT</license>
+  </extension>
+</addon>

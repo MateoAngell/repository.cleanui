@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addons>
-<addon id="slyguy.max.cleanui" name="HBO Max Clean UI" provider-name="Slyguy" version="0.2.22">
+<addon id="slyguy.max.cleanui" name="HBO Max Clean UI" provider-name="Slyguy" version="0.2.23">
   <requires>
     <import addon="script.module.slyguy" version="0.63.1"/>
   </requires>
@@ -27,7 +27,7 @@ Se requiere suscripción.</description>
   </extension>
 </addon>
 
-<addon id="slyguy.disney.plus.cleanui" name="Disney+ Clean UI" provider-name="Slyguy + TU_NOMBRE" version="0.1.42">
+<addon id="slyguy.disney.plus.cleanui" name="Disney+ Clean UI" provider-name="Slyguy + TU_NOMBRE" version="0.1.43">
   <requires>
     <import addon="script.module.slyguy" version="0.0.1"/>
   </requires>
@@ -52,6 +52,15 @@ Disney+ es el hogar exclusivo de tus películas y programas de TV favoritos de D
       <icon>icon.png</icon>
       <fanart>fanart.jpg</fanart>
     </assets>
+  </extension>
+</addon>
+<addon id="script.cleanui.diagnostics" name="Clean UI Diagnóstico" version="0.1.0" provider-name="Clean UI">
+  <requires><import addon="xbmc.python" version="3.0.0" /></requires>
+  <extension point="xbmc.python.script" library="default.py"><provides>executable</provides></extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="es">Diagnóstico privado de Kodi y reproducción</summary>
+    <description lang="es">Registro manual, limitado y local. Exporta informes saneados; no cambia audio, búferes ni credenciales. No envía información a Internet.</description>
+    <platform>all</platform><license>MIT</license>
   </extension>
 </addon>
 </addons>
