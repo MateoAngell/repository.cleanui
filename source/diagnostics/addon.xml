@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <addon id="script.cleanui.diagnostics" name="Clean UI Diagnóstico" version="0.2.0" provider-name="Clean UI">
   <requires><import addon="xbmc.python" version="3.0.0" /></requires>
   <extension point="xbmc.python.script" library="default.py"><provides>executable</provides></extension>

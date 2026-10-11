@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings><category label="Diagnóstico automático"><setting id="capture_enabled" type="bool" label="Registrar automáticamente Kodi y Clean UI" default="true" /></category></settings>

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addons>
-<addon id="slyguy.max.cleanui" name="HBO Max Clean UI" provider-name="Slyguy" version="0.2.25">
+<addon id="slyguy.max.cleanui" name="HBO Max Clean UI" provider-name="Slyguy" version="0.2.26">
   <requires>
     <import addon="script.module.slyguy" version="0.63.1"/>
+    <import addon="script.cleanui.diagnostics" version="0.2.0"/>
   </requires>
   <extension point="xbmc.python.pluginsource" library="default.py" provides="video">
     <provides>video</provides>
@@ -27,9 +28,10 @@ Se requiere suscripción.</description>
   </extension>
 </addon>
 
-<addon id="slyguy.disney.plus.cleanui" name="Disney+ Clean UI" provider-name="Slyguy + TU_NOMBRE" version="0.1.45">
+<addon id="slyguy.disney.plus.cleanui" name="Disney+ Clean UI" provider-name="Slyguy + TU_NOMBRE" version="0.1.46">
   <requires>
     <import addon="script.module.slyguy" version="0.0.1"/>
+    <import addon="script.cleanui.diagnostics" version="0.2.0"/>
   </requires>
   <extension point="xbmc.python.pluginsource" library="default.py" provides="video">
     <provides>video</provides>
@@ -55,12 +57,13 @@ Disney+ es el hogar exclusivo de tus películas y programas de TV favoritos de D
     </assets>
   </extension>
 </addon>
-<addon id="script.cleanui.diagnostics" name="Clean UI Diagnóstico" version="0.1.0" provider-name="Clean UI">
+<addon id="script.cleanui.diagnostics" name="Clean UI Diagnóstico" version="0.2.0" provider-name="Clean UI">
   <requires><import addon="xbmc.python" version="3.0.0" /></requires>
   <extension point="xbmc.python.script" library="default.py"><provides>executable</provides></extension>
+  <extension point="xbmc.service" library="service.py" />
   <extension point="xbmc.addon.metadata">
     <summary lang="es">Diagnóstico privado de Kodi y reproducción</summary>
-    <description lang="es">Registro manual, limitado y local. Exporta informes saneados; no cambia audio, búferes ni credenciales. No envía información a Internet.</description>
+    <description lang="es">Registro automático, privado y limitado. Un único servicio para Disney y Max; guarda eventos, recursos y errores técnicos saneados para recogida privada por ADB. No cambia audio, búferes ni credenciales. No envía información a Internet. Desactivable desde sus ajustes.</description>
     <platform>all</platform><license>MIT</license>
   </extension>
 </addon>
