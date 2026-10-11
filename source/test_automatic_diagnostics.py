@@ -26,10 +26,10 @@ def load_service():
 
 class ProtocolTests(unittest.TestCase):
     def test_no_arbitrary_text_or_accounts(self):
-        clean = protocol.safe_log('ERROR CVideoPlayer stalled Alice Smith https://private/stream 192.168.0.14')
+        clean = protocol.safe_log('ERROR CVideoPlayer stalled Alice Smith https://private/stream 192.0.2.99')
         self.assertNotIn('Alice', clean)
         self.assertNotIn('private', clean)
-        self.assertNotIn('192.168', clean)
+        self.assertNotIn('192.0.2', clean)
         self.assertIn('stalled', clean)
         self.assertIsNone(protocol.safe_log('ERROR CVideoPlayer token=private'))
         self.assertIn('typeerror', protocol.safe_log('TypeError: private title'))

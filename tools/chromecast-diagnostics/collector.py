@@ -278,7 +278,7 @@ class Collector:
             try:
                 transfer = json.loads(adb.read('transfer.json'))
             except ValueError:
-                self.transition('recorder_not_installed')
+                self.transition('recorder_unavailable')
                 return
             if self.sync(adb, transfer):
                 try:
