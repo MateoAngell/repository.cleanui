@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addons>
-<addon id="slyguy.max.cleanui" name="HBO Max Clean UI" provider-name="Slyguy" version="0.2.26">
+<addon id="slyguy.max.cleanui" name="HBO Max Clean UI" provider-name="Slyguy" version="0.3.0">
   <requires>
     <import addon="script.module.slyguy" version="0.63.1"/>
     <import addon="script.cleanui.diagnostics" version="0.2.0"/>
@@ -28,7 +28,7 @@ Se requiere suscripción.</description>
   </extension>
 </addon>
 
-<addon id="slyguy.disney.plus.cleanui" name="Disney+ Clean UI" provider-name="Slyguy + TU_NOMBRE" version="0.1.46">
+<addon id="slyguy.disney.plus.cleanui" name="Disney+ Clean UI" provider-name="Slyguy + TU_NOMBRE" version="0.2.0">
   <requires>
     <import addon="script.module.slyguy" version="0.0.1"/>
     <import addon="script.cleanui.diagnostics" version="0.2.0"/>
@@ -68,3 +68,4 @@ Disney+ es el hogar exclusivo de tus películas y programas de TV favoritos de D
   </extension>
 </addon>
 </addons>
+
