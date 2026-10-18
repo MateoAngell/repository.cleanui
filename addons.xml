@@ -28,7 +28,7 @@ Se requiere suscripción.</description>
   </extension>
 </addon>
 
-<addon id="slyguy.disney.plus.cleanui" name="Disney+ Clean UI" provider-name="Slyguy + TU_NOMBRE" version="0.2.5">
+<addon id="slyguy.disney.plus.cleanui" name="Disney+" provider-name="Slyguy + TU_NOMBRE" version="0.2.6">
   <requires>
     <import addon="script.module.slyguy" version="0.0.1"/>
     <import addon="script.cleanui.diagnostics" version="0.2.0"/>
@@ -57,6 +57,7 @@ Disney+ es el hogar exclusivo de tus películas y programas de TV favoritos de D
     </assets>
   </extension>
 </addon>
+
 <addon id="script.cleanui.diagnostics" name="Clean UI Diagnóstico" version="0.2.0" provider-name="Clean UI">
   <requires><import addon="xbmc.python" version="3.0.0" /></requires>
   <extension point="xbmc.python.script" library="default.py"><provides>executable</provides></extension>
