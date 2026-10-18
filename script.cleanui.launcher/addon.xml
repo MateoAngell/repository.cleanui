@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon id="script.cleanui.launcher" name="Clean UI TV Shortcuts" version="0.1.0" provider-name="Clean UI">
+  <requires><import addon="xbmc.python" version="3.0.0"/></requires>
+  <extension point="xbmc.python.script" library="default.py"/>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en">Open existing Clean UI interfaces from Android TV shortcuts.</summary>
+    <summary lang="es">Abre las interfaces Clean UI desde accesos de Android TV.</summary>
+    <description lang="en">A one-shot, allowlisted launcher. No background service, network listener, credentials, or playback changes.</description>
+    <platform>all</platform>
+    <license>MIT</license>
+  </extension>
+</addon>
