@@ -1,0 +1,258 @@
+<?xml version='1.0' encoding='utf-8'?>
+<window type="dialog" id="13002">
+  <defaultcontrol>4100</defaultcontrol>
+  <backgroundcolor>FF000000</backgroundcolor>
+  <controls>
+    <control type="image">
+      <left>0</left>
+      <top>0</top>
+      <width>1920</width>
+      <height>1080</height>
+      <aspectratio>stretch</aspectratio>
+      <texture>max-profile-atmosphere.png</texture>
+    </control>
+    <control type="label">
+      <left>200</left>
+      <top>150</top>
+      <width>1520</width>
+      <height>100</height>
+      <font>font52_title</font>
+      <label>¿Quién está viendo?</label>
+      <textcolor>FFF5F5F7</textcolor>
+      <aligny>center</aligny>
+      <align>center</align>
+      <scroll>false</scroll>
+    </control>
+    <control type="image">
+      <left>704</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),1) + Integer.IsEqual(Container(4100).CurrentItem,1)</visible>
+    </control>
+    <control type="image">
+      <left>544</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),2) + Integer.IsEqual(Container(4100).CurrentItem,1)</visible>
+    </control>
+    <control type="image">
+      <left>864</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),2) + Integer.IsEqual(Container(4100).CurrentItem,2)</visible>
+    </control>
+    <control type="image">
+      <left>384</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),3) + Integer.IsEqual(Container(4100).CurrentItem,1)</visible>
+    </control>
+    <control type="image">
+      <left>704</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),3) + Integer.IsEqual(Container(4100).CurrentItem,2)</visible>
+    </control>
+    <control type="image">
+      <left>1024</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),3) + Integer.IsEqual(Container(4100).CurrentItem,3)</visible>
+    </control>
+    <control type="image">
+      <left>224</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),4) + Integer.IsEqual(Container(4100).CurrentItem,1)</visible>
+    </control>
+    <control type="image">
+      <left>544</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),4) + Integer.IsEqual(Container(4100).CurrentItem,2)</visible>
+    </control>
+    <control type="image">
+      <left>864</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),4) + Integer.IsEqual(Container(4100).CurrentItem,3)</visible>
+    </control>
+    <control type="image">
+      <left>1184</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),4) + Integer.IsEqual(Container(4100).CurrentItem,4)</visible>
+    </control>
+    <control type="image">
+      <left>64</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),5) + Integer.IsEqual(Container(4100).CurrentItem,1)</visible>
+    </control>
+    <control type="image">
+      <left>384</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),5) + Integer.IsEqual(Container(4100).CurrentItem,2)</visible>
+    </control>
+    <control type="image">
+      <left>704</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),5) + Integer.IsEqual(Container(4100).CurrentItem,3)</visible>
+    </control>
+    <control type="image">
+      <left>1024</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),5) + Integer.IsEqual(Container(4100).CurrentItem,4)</visible>
+    </control>
+    <control type="image">
+      <left>1344</left>
+      <top>284</top>
+      <width>512</width>
+      <height>512</height>
+      <texture>max-profile-focus-glow.png</texture>
+      <aspectratio>stretch</aspectratio>
+      <visible>Control.HasFocus(4100) + Integer.IsEqual(Window.Property(cleanui.profiles.visible),5) + Integer.IsEqual(Container(4100).CurrentItem,5)</visible>
+    </control>
+    <control type="list" id="4100">
+      <animation effect="fade" start="65" end="100" time="150" condition="String.IsEqual(Window.Property(cleanui.motion),true)">WindowOpen</animation>
+      <left>320</left>
+      <top>386</top>
+      <width>1280</width>
+      <height>476</height>
+      <orientation>horizontal</orientation>
+      <scrolltime>150</scrolltime>
+      <onup>4100</onup>
+      <ondown>4100</ondown>
+      <onleft>4100</onleft>
+      <onright>4100</onright>
+      <itemlayout width="320" height="476">
+        <control type="image">
+          <left>30</left>
+          <top>24</top>
+          <width>260</width>
+          <height>260</height>
+          <aspectratio>stretch</aspectratio>
+          <texture colordiffuse="FF282828">circle-hd.png</texture>
+        </control>
+        <control type="image">
+          <left>30</left>
+          <top>24</top>
+          <width>260</width>
+          <height>260</height>
+          <aspectratio>stretch</aspectratio>
+          <texture diffuse="circle-hd.png" background="true">$INFO[ListItem.Art(thumb)]</texture>
+        </control>
+        <control type="label">
+          <left>0</left>
+          <top>300</top>
+          <width>320</width>
+          <height>52</height>
+          <font>font30_title</font>
+          <label>$INFO[ListItem.Label]</label>
+          <textcolor>FFF5F5F7</textcolor>
+          <aligny>center</aligny>
+          <align>center</align>
+          <scroll>false</scroll>
+        </control>
+      </itemlayout>
+      <focusedlayout width="320" height="476">
+        <control type="image">
+          <left>8</left>
+          <top>2</top>
+          <width>304</width>
+          <height>304</height>
+          <aspectratio>stretch</aspectratio>
+          <texture colordiffuse="FF282828">circle-hd.png</texture>
+        </control>
+        <control type="image">
+          <left>8</left>
+          <top>2</top>
+          <width>304</width>
+          <height>304</height>
+          <aspectratio>stretch</aspectratio>
+          <texture diffuse="circle-hd.png" background="true">$INFO[ListItem.Art(thumb)]</texture>
+        </control>
+        <control type="image">
+          <left>8</left>
+          <top>2</top>
+          <width>304</width>
+          <height>304</height>
+          <aspectratio>stretch</aspectratio>
+          <texture>profile-ring-hd.png</texture>
+          <visible>Control.HasFocus(4100)</visible>
+        </control>
+        <control type="label">
+          <left>0</left>
+          <top>342</top>
+          <width>320</width>
+          <height>52</height>
+          <font>font30_title</font>
+          <label>$INFO[ListItem.Label]</label>
+          <textcolor>FFF5F5F7</textcolor>
+          <aligny>center</aligny>
+          <align>center</align>
+          <scroll>false</scroll>
+        </control>
+      </focusedlayout>
+    </control>
+    <control type="button" id="1003">
+      <left>820</left>
+      <top>900</top>
+      <width>280</width>
+      <height>64</height>
+      <font>font27</font>
+      <label>Volver</label>
+      <visible>false</visible>
+      <texturefocus>transparent.png</texturefocus>
+      <texturenofocus>transparent.png</texturenofocus>
+      <onup>4100</onup>
+      <onleft>4100</onleft>
+      <onright>4100</onright>
+    </control>
+  </controls>
+</window>

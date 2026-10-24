@@ -1,0 +1,3 @@
+# Recovered package bytes must survive a Windows checkout with core.autocrlf.
+slyguy.max.cleanui/** -text
+slyguy.max.cleanui.protected.json text eol=lf

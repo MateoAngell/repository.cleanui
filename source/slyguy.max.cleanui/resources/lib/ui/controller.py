@@ -1,0 +1,1226 @@
+import time
+import traceback
+
+import xbmc
+import xbmcaddon
+import xbmcgui
+
+from slyguy import gui
+
+from .repository import Repository
+from .home_window import HomeWindow
+from .detail_window import DetailWindow
+
+
+class PerfTimer(object):
+    """Medidor ligero de rendimiento (logs a LOGDEBUG, sin coste visible)."""
+
+    def __init__(self, name):
+        self.name = name
+        self.started = time.monotonic()
+        try:
+            from .diagnostics import emit
+            emit('load_start')
+        except Exception:
+            pass
+
+    def mark(self, stage):
+        elapsed = (time.monotonic() - self.started) * 1000.0
+        try:
+            from .diagnostics import emit
+            if stage != 'window_closed':
+                emit('load_end', elapsed_ms=elapsed)
+        except Exception:
+            pass
+        xbmc.log(
+            '[CLEANUI][PERF] {} {}: {:.1f} ms'.format(
+                self.name,
+                stage,
+                elapsed,
+            ),
+            xbmc.LOGDEBUG,
+        )
+        return elapsed
+
+
+class _TransitionCurtain(xbmcgui.WindowDialog):
+    """Oculta brevemente la interfaz nativa de Kodi entre ventanas."""
+
+    def __init__(self):
+        super(_TransitionCurtain, self).__init__()
+        self._background = xbmcgui.ControlImage(
+            0,
+            0,
+            1920,
+            1080,
+            'white.png',
+            colorDiffuse='FF000000',
+        )
+        self.addControl(self._background)
+
+
+class UIController(object):
+    def __init__(self):
+        self.repository = Repository()
+        self.addon_path = xbmcaddon.Addon().getAddonInfo('path')
+        self._windows = []
+        # Pila de modelos Screen para secciones hermanas (Home/Peliculas/Series/...).
+        # Solo guarda datos (no ventanas Kodi) para que BACK recargue la seccion
+        # anterior sin apilar WindowXMLDialog. Vease _open_home_like().
+        self._home_stack = []
+        self._navigation_loader = None
+        self._applying_load = False
+        self._initialize_session_state()
+
+    def load_navigation(self, window, builder, apply):
+        if self.exit_requested or self._pending_playback or self._closing_all_windows:
+            return False
+        if self._navigation_loader is None:
+            from .navigation import NavigationLoader
+            self._navigation_loader = NavigationLoader()
+        return self._navigation_loader.submit(window, builder, apply)
+
+    def cancel_navigation(self, window):
+        if self._navigation_loader:
+            self._navigation_loader.cancel(window)
+
+    def complete_navigation(self, window):
+        if self._navigation_loader:
+            return self._navigation_loader.finish(window)
+        return False
+
+    def retry_navigation(self, window):
+        job = getattr(window, '_last_load', None)
+        return self.load_navigation(window, *job) if job else False
+
+    def close_navigation(self):
+        """Release the metadata worker only after the complete UI session ends."""
+        if (self._windows or self._pending_playback or self._processing_playback
+                or self._restored_stack):
+            return False
+        loader = self._navigation_loader
+        if loader is not None:
+            self._navigation_loader = None
+            loader.close()
+        return True
+
+    def _initialize_session_state(self):
+        self._pending_playback = None
+        self._pending_builtin = None
+        self._processing_playback = False
+        self._restored_stack = None
+        self._selecting_profile = False
+        # True únicamente cuando el usuario solicita salir desde el Home.
+        self.exit_requested = False
+        self._transition_curtain = None
+        self._closing_all_windows = False
+        self._quit_issued = False
+        self._transition_release_target = None
+        self._playback_generation = 0
+
+    def _show_error(self, context):
+        try:
+            from .diagnostics import emit
+            emit('ui_error')
+        except Exception:
+            pass
+        error = traceback.format_exc()
+
+        xbmc.log(
+            '[CLEANUI] UIController.{}:\n{}'.format(context, error),
+            xbmc.LOGERROR,
+        )
+
+        xbmcgui.Dialog().ok(
+            'HBO Max Clean UI',
+            'No se pudo abrir esta pantalla.\n\n'
+            'Revisa kodi.log y busca [CLEANUI].',
+        )
+
+    def begin_transition(self):
+        """Do not put a focus-consuming black dialog above live navigation.
+
+        Kodi need not send onFocus when revealing an already focused parent.
+        A curtain waiting for that event can therefore remain indefinitely.
+        Native dialogs reveal their parent directly instead.
+        """
+        self.end_transition()
+
+    def end_transition(self):
+        """Retira la cortina cuando la siguiente interfaz ya está preparada."""
+        curtain = self._transition_curtain
+        self._transition_curtain = None
+        if curtain is None:
+            return
+        try:
+            curtain.close()
+        except Exception:
+            xbmc.log(
+                '[CLEANUI] No se pudo cerrar la cortina de transición:\n'
+                '{}'.format(traceback.format_exc()),
+                xbmc.LOGWARNING,
+            )
+
+    def _finish_exit_if_ready(self):
+        """
+        Termina la UI únicamente cuando ya no queda ningún
+        WindowDialog Clean UI dentro de doModal(). NO cierra Kodi.
+        """
+        if not self.exit_requested:
+            return False
+        if self._windows:
+            return False
+        if self._quit_issued:
+            return True
+        self._quit_issued = True
+        self._closing_all_windows = False
+        self._transition_release_target = None
+        # All modal children are closed. The entry owner still owns the base.
+        self.end_transition()
+        xbmc.log(
+            '[CLEANUI] Todas las ventanas Clean UI terminaron; '
+            'entregando salida al propietario de la sesión',
+            xbmc.LOGINFO,
+        )
+        # The session owner closes its normal base before restoring Kodi.
+        return True
+
+    def notify_window_focused(self, window):
+        """
+        Recibe la confirmación de Kodi de que una ventana Clean UI ha
+        recuperado el foco. Si esa ventana era la que debía quedar expuesta
+        tras una transición, ya se puede retirar la cortina. No usa sleep fijo
+        ni polling de getFocusId().
+        """
+        if self.exit_requested or self._closing_all_windows:
+            return
+        if self._transition_curtain is None:
+            return
+        if self._transition_release_target is not window:
+            return
+        # Durante una reconstrucción de la pila tras reproducción, todavía
+        # puede faltar por restaurar una pantalla padre. No descubrir Videos
+        # entre una restauración y la siguiente.
+        self._transition_release_target = None
+        xbmc.log(
+            '[CLEANUI] Ventana padre recuperó foco; retirando cortina',
+            xbmc.LOGINFO,
+        )
+        self.end_transition()
+
+    def close_child_window(self, window):
+        """
+        Cierra una pantalla secundaria ocultando el salto momentáneo a la
+        ventana de vídeos de Kodi.
+        """
+        if self._navigation_loader:
+            self.cancel_navigation(window)
+        if window not in self._windows:
+            try:
+                window.close()
+            except Exception:
+                pass
+            return
+
+        # Regreso normal a una ventana ya apilada (padre Clean UI vivo debajo):
+        # no mostrar cortina negra, porque revelaría la ventana de Vídeos y
+        # produciría el flash negro. Kodi revela al padre directamente.
+        if len(self._windows) > 1:
+            try:
+                window.close()
+            except Exception:
+                xbmc.log(
+                    '[CLEANUI] Error cerrando una ventana secundaria:\n'
+                    '{}'.format(traceback.format_exc()),
+                    xbmc.LOGERROR,
+                )
+            return
+
+        # Casos sin superficie Clean UI estable debajo (vuelta desde
+        # reproducción, reconstrucción de pila, navegación pendiente): sí usar
+        # cortina. Armar el padre como destino de liberación ANTES de cerrar la
+        # hija, para no depender del retorno de doModal().
+        if len(self._windows) > 1:
+            self._transition_release_target = self._windows[-2]
+        self.begin_transition()
+        try:
+            window.close()
+        except Exception:
+            xbmc.log(
+                '[CLEANUI] Error cerrando una ventana secundaria:\n'
+                '{}'.format(traceback.format_exc()),
+                xbmc.LOGERROR,
+            )
+
+    def _show_window(self, window):
+        self._windows.append(window)
+        if xbmc.getCondVisibility("!String.IsEmpty(Window(10000).Property(cleanui.diagnostics.owner))"):
+            self._log_resource_counts('window_open')
+        # En la última fase de restauración tras cerrar fullscreenvideo, la
+        # nueva ventana será la superficie Clean UI que debe sustituir a la
+        # cortina. Se libera al recibir su onFocus(), no por temporización.
+        if (
+            self._transition_curtain is not None
+            and self._processing_playback
+            and self._restored_stack
+            and not self.exit_requested
+        ):
+            self._transition_release_target = window
+            xbmc.log(
+                '[CLEANUI] Ultima ventana de restauracion armada como '
+                'destino de la transicion',
+                xbmc.LOGINFO,
+            )
+        try:
+            window.doModal()
+        finally:
+            if getattr(self, '_navigation_loader', None):
+                self.cancel_navigation(window)
+            release = getattr(window, 'release_resources', None)
+            if callable(release):
+                try:
+                    release()
+                except Exception:
+                    xbmc.log(
+                        '[CLEANUI] Error liberando recursos de la '
+                        'ventana:\n{}'.format(traceback.format_exc()),
+                        xbmc.LOGWARNING,
+                    )
+            if window in self._windows:
+                self._windows.remove(window)
+            if getattr(self, '_navigation_loader', None):
+                self.close_navigation()
+            if xbmc.getCondVisibility("!String.IsEmpty(Window(10000).Property(cleanui.diagnostics.owner))"):
+                self._log_resource_counts('window_closed')
+        # Este código está fuera del finally para no ocultar excepciones.
+        if self._windows:
+            if (
+                self._closing_all_windows
+                and self._pending_playback
+                and len(self._windows) == 1
+                and isinstance(self._windows[0], HomeWindow)
+            ):
+                self._closing_all_windows = False
+                self._drain_pending_playback()
+                return
+            # La hija terminó su doModal(), pero no se retira la cortina
+            # todavía. Kodi debe devolver foco a la ventana padre; onFocus() de
+            # esa ventana notificará al controlador y liberará la cortina sin
+            # sleep fijo.
+            if not self._closing_all_windows:
+                if isinstance(window, DetailWindow) and isinstance(self._windows[-1], HomeWindow):
+                    self._windows[-1].reset_navigation()
+                self._transition_release_target = self._windows[-1]
+                xbmc.log(
+                    '[CLEANUI] Esperando foco de la ventana padre antes '
+                    'de retirar la cortina',
+                    xbmc.LOGINFO,
+                )
+            return
+        self._closing_all_windows = False
+        if self.exit_requested:
+            self._pending_playback = None
+            self._pending_builtin = None
+            self._finish_exit_if_ready()
+            return
+        if (
+            self._pending_playback
+            and not self._processing_playback
+            and not self._pending_builtin
+        ):
+            self._drain_pending_playback()
+            return
+        if self._pending_builtin:
+            command = self._pending_builtin
+            self._pending_builtin = None
+            xbmc.log(
+                '[CLEANUI] Todas las ventanas se cerraron; '
+                'ejecutando navegacion pendiente: {}'.format(command),
+                xbmc.LOGINFO,
+            )
+            try:
+                xbmc.executebuiltin(command)
+            except Exception:
+                xbmc.log(
+                    '[CLEANUI] Error ejecutando navegacion pendiente:\n'
+                    '{}'.format(traceback.format_exc()),
+                    xbmc.LOGERROR,
+                )
+            finally:
+                self.end_transition()
+            return
+        # Durante la reconstrucción secuencial todavía queda una pantalla padre
+        # por abrir. No descubrir la ventana nativa de Kodi entre ambas.
+        restoring_parent = (
+            self._processing_playback
+            and self._restored_stack
+            and len(self._restored_stack) > 1
+        )
+        if restoring_parent:
+            self.begin_transition()
+            xbmc.log(
+                '[CLEANUI] Manteniendo transición hasta restaurar '
+                'la pantalla anterior',
+                xbmc.LOGINFO,
+            )
+            return
+        self.end_transition()
+
+    def _navigation_screens(self):
+        actual_screens = []
+        seen = set()
+        for window in self._windows:
+            screen = getattr(window, 'screen', None)
+            if not screen:
+                continue
+            key = id(screen)
+            if key in seen:
+                continue
+            seen.add(key)
+            if isinstance(window, HomeWindow):
+                screen._cleanui_history = list(window._history)
+            actual_screens.append(screen)
+
+        if self._restored_stack:
+            screens = []
+            seen = set()
+            for screen in self._restored_stack[:-1]:
+                key = id(screen)
+                if key in seen:
+                    continue
+                seen.add(key)
+                screens.append(screen)
+            for screen in actual_screens:
+                key = id(screen)
+                if key in seen:
+                    continue
+                seen.add(key)
+                screens.append(screen)
+            if not actual_screens:
+                for screen in self._restored_stack:
+                    key = id(screen)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    screens.append(screen)
+            return screens
+
+        return actual_screens
+
+    def _restore_screen(self, screen):
+        if not screen:
+            return
+        if screen.screen_type in ('home', 'collection', 'search'):
+            screen_kind = (
+                screen.screen_kind
+                or ('home' if screen.screen_type == 'home' else 'collection')
+            )
+            if screen_kind == 'home':
+                screen._cleanui_window_state = {}
+            window = HomeWindow(
+                'uihome.xml',
+                self.addon_path,
+                'Default',
+                '1080i',
+                controller=self,
+                screen=screen,
+                screen_kind=screen_kind,
+            )
+        else:
+            window = DetailWindow(
+                'ui_detail.xml',
+                self.addon_path,
+                'Default',
+                '1080i',
+                controller=self,
+                screen=screen,
+            )
+        self._show_window(window)
+        del window
+
+    def play(self, path):
+        if (
+            not path
+            or (self._navigation_loader is not None and self._navigation_loader.active)
+            or self.exit_requested
+            or self._pending_builtin
+            or self._pending_playback
+            or self._closing_all_windows
+        ):
+            return False
+
+        for window in list(self._windows):
+            try:
+                capture_state = getattr(window, 'capture_state', None)
+                if capture_state:
+                    capture_state()
+            except Exception:
+                xbmc.log(
+                    '[CLEANUI] No se pudo guardar el estado de una ventana:\n'
+                    '{}'.format(traceback.format_exc()),
+                    xbmc.LOGWARNING,
+                )
+
+        screens = self._navigation_screens()
+        screen_names = [
+            getattr(screen, 'screen_type', 'unknown')
+            for screen in screens
+        ]
+
+        xbmc.log(
+            '[CLEANUI] Preparando reproduccion; pila guardada: {}'.format(
+                ' -> '.join(screen_names) if screen_names else '(vacia)'
+            ),
+            xbmc.LOGINFO,
+        )
+
+        self._pending_playback = {
+            'path': path,
+            'screens': screens,
+        }
+        # Close every Clean UI modal before handing the path to Kodi. Keeping
+        # a dialog alive here can leave video playing underneath the old
+        # cover/detail window on slower devices. The captured screen models
+        # are restored after playback without another network request.
+        self._close_all_windows()
+        return True
+
+    def _close_all_windows(self):
+        if not self._windows:
+            return
+        self._closing_all_windows = True
+        for window in reversed(list(self._windows)):
+            try:
+                if self._navigation_loader:
+                    self.cancel_navigation(window)
+                window.close()
+            except Exception:
+                xbmc.log(
+                    '[CLEANUI] Error solicitando el cierre de una ventana:\n'
+                    '{}'.format(traceback.format_exc()),
+                    xbmc.LOGERROR,
+                )
+
+    def open_plugin_directory(self, path):
+        if not path:
+            return False
+        safe_path = path.replace('"', '\\"')
+        self._pending_builtin = (
+            'ActivateWindow(Videos,"{}",return)'.format(safe_path)
+        )
+        xbmc.log(
+            '[CLEANUI] Directorio pendiente despues de cerrar '
+            'Clean UI: {}'.format(safe_path),
+            xbmc.LOGINFO,
+        )
+        self._close_all_windows()
+        return True
+
+    def run_plugin_after_close(self, path):
+        if not path:
+            return False
+        safe_path = path.replace('"', '\\"')
+        self._pending_builtin = 'RunPlugin("{}")'.format(safe_path)
+        xbmc.log(
+            '[CLEANUI] Accion de plugin pendiente despues de '
+            'cerrar Clean UI',
+            xbmc.LOGINFO,
+        )
+        self._close_all_windows()
+        return True
+
+    def exit_clean_ui(self):
+        """
+        Solicita la salida. Quit se ejecuta posteriormente, una sola vez,
+        cuando todos los WindowDialog ya han abandonado doModal().
+        """
+        if self.exit_requested:
+            return True
+
+        # Solo abrir la cortina si hay ventanas Clean UI que proteger. Si la
+        # pila ya está vacía, no crear/cerrar un WindowDialog inútil (flash).
+        if self._windows:
+            self.begin_transition()
+        self.exit_requested = True
+        self._pending_playback = None
+        self._pending_builtin = None
+        # Al salir del addon la pila de secciones ya no sirve; liberar sus
+        # modelos Screen para no retenerlos.
+        self._home_stack = []
+        xbmc.log(
+            '[CLEANUI] Salida explícita solicitada; cerrando todas las ventanas',
+            xbmc.LOGINFO,
+        )
+        self._close_all_windows()
+        # Normalmente habrá una Home activa y _show_window() llegará después
+        # al estado vacío. Esto cubre también la ruta excepcional en la que
+        # no hubiera ya ningún diálogo en la pila.
+        self._finish_exit_if_ready()
+        return True
+
+    def _player_is_playing(self, player):
+        try:
+            return player.isPlayingVideo() or player.isPlaying()
+        except Exception:
+            return False
+
+    def _player_has_media(self):
+        try:
+            return (
+                xbmc.getCondVisibility('Player.HasMedia')
+                or xbmc.getCondVisibility('Player.HasVideo')
+                or xbmc.getCondVisibility('Player.HasAudio')
+            )
+        except Exception:
+            return False
+
+    def _close_busy_dialogs(self, context='', write_log=False):
+        if write_log:
+            xbmc.log(
+                '[CLEANUI] Cerrando dialogos de carga de Kodi ({})'.format(
+                    context or 'sin contexto'
+                ),
+                xbmc.LOGINFO,
+            )
+        for dialog_name in (
+            'busydialog',
+            'busydialognocancel',
+        ):
+            try:
+                xbmc.executebuiltin(
+                    'Dialog.Close({},true)'.format(dialog_name)
+                )
+            except Exception:
+                xbmc.log(
+                    '[CLEANUI] No se pudo cerrar {}:\n{}'.format(
+                        dialog_name,
+                        traceback.format_exc(),
+                    ),
+                    xbmc.LOGWARNING,
+                )
+
+    def _busy_dialog_visible(self):
+        try:
+            return (
+                xbmc.getCondVisibility('Window.IsVisible(busydialog)')
+                or xbmc.getCondVisibility(
+                    'Window.IsVisible(busydialognocancel)'
+                )
+            )
+        except Exception:
+            return False
+
+    def _stop_player_safely(self, player, context=''):
+        xbmc.log(
+            '[CLEANUI] Deteniendo reproduccion de forma segura ({})'.format(
+                context or 'sin contexto'
+            ),
+            xbmc.LOGINFO,
+        )
+        try:
+            player.stop()
+        except Exception:
+            xbmc.log(
+                '[CLEANUI] Error deteniendo el reproductor:\n{}'.format(
+                    traceback.format_exc()
+                ),
+                xbmc.LOGERROR,
+            )
+        monitor = xbmc.Monitor()
+        for unused in range(50):
+            if monitor.abortRequested():
+                break
+            playing = self._player_is_playing(player)
+            has_media = self._player_has_media()
+            fullscreen_visible = xbmc.getCondVisibility(
+                'Window.IsVisible(fullscreenvideo)'
+            )
+            if not playing and not has_media and not fullscreen_visible:
+                break
+            xbmc.sleep(100)
+
+    def _log_resource_counts(self, stage, saved_screens=None):
+        # One summary per transition, no titles, URLs, account data or timers.
+        import threading
+        screens = [getattr(w, 'screen', None) for w in self._windows]
+        screens.extend(entry[0] for entry in self._home_stack)
+        screens.extend(saved_screens or [])
+        screens.extend((self._pending_playback or {}).get('screens') or [])
+        if self._restored_stack:
+            screens.extend(self._restored_stack)
+        unique = {id(s): s for s in screens if s is not None}
+        cards = {id(card) for screen in unique.values()
+                 for rail in getattr(screen, 'rails', []) for card in rail.items}
+        xbmc.log('[CLEANUI][RESOURCES] {} windows={} screens={} cards={} threads={} cache={}'.format(
+            stage, len(self._windows), len(unique), len(cards),
+            threading.active_count(), len(getattr(self.repository, '_cache', {}))), xbmc.LOGDEBUG)
+        try:
+            import json
+            import time
+            counts = dict(stage=stage, windows=len(self._windows), screens=len(unique),
+                          cards=len(cards), threads=threading.active_count(),
+                          cache=len(getattr(self.repository, '_cache', {})), time=time.time())
+            xbmcgui.Window(10000).setProperty('cleanui.resources.slyguy.max.cleanui', json.dumps(counts))
+            from .diagnostics import emit
+            emit(stage, **{k: v for k, v in counts.items() if k != 'stage'})
+        except Exception:
+            pass
+
+    def _run_player(self, path, screens=None):
+        from .playback import observe_playback
+        self._log_resource_counts('before_playback', screens)
+        try:
+            return observe_playback(
+                path, on_started=self.end_transition,
+                cancelled=lambda: self.exit_requested,
+            )
+        finally:
+            self._log_resource_counts('after_playback', screens)
+
+    def _wait_before_restore(self):
+        # observe_playback already received a terminal event. Do not inspect
+        # fullscreen or close global Kodi dialogs during restoration.
+        return not xbmc.Monitor().abortRequested()
+
+    def _drain_pending_playback(self):
+        if self._processing_playback:
+            return
+
+        self._processing_playback = True
+        try:
+            while self._pending_playback and not self.exit_requested:
+                request = self._pending_playback
+                self._pending_playback = None
+                self._restored_stack = None
+                path = request.get('path')
+                screens = list(request.get('screens') or [])
+
+                screen_names = [
+                    getattr(screen, 'screen_type', 'unknown')
+                    for screen in screens
+                ]
+
+                xbmc.log(
+                    '[CLEANUI] Pila guardada para reproduccion: {}'.format(
+                        ' -> '.join(screen_names) if screen_names else '(vacia)'
+                    ),
+                    xbmc.LOGINFO,
+                )
+
+                try:
+                    self._run_player(path, screens)
+                except Exception:
+                    xbmc.log(
+                        '[CLEANUI] Error durante la reproduccion:\n{}'.format(
+                            traceback.format_exc()
+                        ),
+                        xbmc.LOGERROR,
+                    )
+                finally:
+                    # Ocultar el intervalo entre fullscreenvideo y la ventana
+                    # restaurada.
+                    if not self.exit_requested:
+                        self.begin_transition()
+
+                if self.exit_requested:
+                    xbmc.log(
+                        '[CLEANUI] No se restaurará la interfaz porque se '
+                        'solicitó salir',
+                        xbmc.LOGINFO,
+                    )
+                    break
+
+                if xbmc.Monitor().abortRequested():
+                    break
+
+                if not self._wait_before_restore():
+                    # No dejar la cortina abierta si se aborta la restauración.
+                    self.end_transition()
+                    break
+
+                # NO bloquear la restauración esperando una petición a Disney+.
+                # El refresco de Continue Watching no puede bloquear la vuelta
+                # a la interfaz.
+                # self._refresh_after_playback(screens)
+
+                xbmc.log(
+                    '[CLEANUI] Restaurando navegacion de {} pantallas: {}'.format(
+                        len(screens),
+                        ' -> '.join(screen_names)
+                        if screen_names else '(vacia)',
+                    ),
+                    xbmc.LOGINFO,
+                )
+
+                for index in range(len(screens) - 1, -1, -1):
+                    if self.exit_requested:
+                        xbmc.log(
+                            '[CLEANUI] Restauración cancelada por salida explícita',
+                            xbmc.LOGINFO,
+                        )
+                        break
+                    if self._pending_playback:
+                        break
+                    if xbmc.Monitor().abortRequested():
+                        break
+
+                    screen = screens[index]
+                    screen_type = getattr(
+                        screen,
+                        'screen_type',
+                        'unknown',
+                    )
+
+                    self._restored_stack = screens[:index + 1]
+
+                    xbmc.log(
+                        '[CLEANUI] Restaurando pantalla {} de {}: {}'.format(
+                            index + 1,
+                            len(screens),
+                            screen_type,
+                        ),
+                        xbmc.LOGINFO,
+                    )
+
+                    try:
+                        self._restore_screen(screen)
+                    except Exception:
+                        xbmc.log(
+                            '[CLEANUI] Error restaurando pantalla {} '
+                            '({}):\n{}'.format(
+                                index,
+                                screen_type,
+                                traceback.format_exc(),
+                            ),
+                            xbmc.LOGERROR,
+                        )
+                    finally:
+                        self._restored_stack = None
+
+                    if self.exit_requested:
+                        xbmc.log(
+                            '[CLEANUI] El usuario salió durante la restauración',
+                            xbmc.LOGINFO,
+                        )
+                        break
+
+                    if xbmc.Monitor().abortRequested():
+                        break
+        finally:
+            self._restored_stack = None
+            self._processing_playback = False
+            self.close_navigation()
+
+    def _refresh_after_playback(self, screens):
+        """Refresh Continue Watching without rebuilding Home."""
+        home_screen = None
+        for screen in screens:
+            if getattr(screen, 'screen_type', '') == 'home':
+                home_screen = screen
+                break
+
+        if not home_screen:
+            xbmc.log(
+                '[CLEANUI] Refresco posterior a reproduccion: '
+                'no hay pantalla Home en la pila',
+                xbmc.LOGINFO,
+            )
+            return False
+
+        try:
+            refreshed = self.repository.refresh_continue_watching(
+                home_screen
+            )
+        except Exception:
+            xbmc.log(
+                '[CLEANUI] Error refrescando Continue Watching:\n'
+                '{}'.format(traceback.format_exc()),
+                xbmc.LOGWARNING,
+            )
+            return False
+
+        xbmc.log(
+            '[CLEANUI] Refresco posterior a reproduccion: {}'.format(
+                'actualizado' if refreshed else 'sin cambios'
+            ),
+            xbmc.LOGINFO,
+        )
+        return refreshed
+
+    def _open_detail(self, builder, context, *args):
+        if self._windows:
+            return self.load_navigation(self._windows[-1], lambda: builder(*args),
+                                        lambda screen: self._present_detail(screen, context))
+        try:
+            return self._present_detail(builder(*args), context)
+        except Exception:
+            self._show_error(context)
+            return False
+
+    def _present_detail(self, screen, context):
+        try:
+            if not screen:
+                raise RuntimeError(
+                    'La API no devolvió contenido para la pantalla'
+                )
+
+            if (
+                not screen.hero
+                and getattr(screen, 'screen_type', '') != 'search'
+            ):
+                raise RuntimeError(
+                    'La API no devolvió contenido para la pantalla'
+                )
+
+            window = DetailWindow(
+                'ui_detail.xml',
+                self.addon_path,
+                'Default',
+                '1080i',
+                controller=self,
+                screen=screen,
+            )
+
+            self._show_window(window)
+            del window
+            return True
+
+        except Exception:
+            self._show_error(context)
+            return False
+
+    def open_home(self):
+        try:
+            timer = PerfTimer('open_home')
+            # Profile selection must complete before Home exists.  Closing a
+            # nested modal can otherwise pass its SELECT event to Home's first
+            # focused card.
+            from . import intro
+            try:
+                selected = self.select_start_profile()
+            finally:
+                ready = intro.finish()
+            if not selected or not ready:
+                return False
+            window = HomeWindow(
+                'uihome.xml',
+                self.addon_path,
+                'Default',
+                '1080i',
+                controller=self,
+                screen=None,
+                screen_kind='home',
+                initial_loader=self._load_initial_home,
+            )
+            self._show_window(window)
+            timer.mark('window_closed')
+            del window
+            return True
+
+        except Exception:
+            self._show_error('open_home')
+            return False
+
+    def _load_initial_home(self):
+        return self.repository.build_home()
+
+    def select_start_profile(self):
+        from slyguy import userdata
+        from .profile_window import choose_profile
+        if userdata.get('kid_lockdown', False):
+            return True
+        return choose_profile(self.addon_path)
+
+    def open_movie(self, deeplinkid, card=None):
+        if card is not None and isinstance(card.source_item, dict):
+            self.repository._raw_items[str(deeplinkid)] = card.source_item
+        return self._open_detail(
+            self.repository.build_movie_detail,
+            'open_movie',
+            deeplinkid,
+        )
+
+    def open_show(self, showid):
+        return self._open_detail(
+            self.repository.build_show_episodes,
+            'open_show',
+            showid,
+        )
+
+    def switch_season(self, source_window, season):
+        with gui.busy():
+            screen = self.repository.build_show_episodes(season.show_id, season.season_id)
+        source_window.screen = screen
+        source_window._page_history = []
+        source_window._last_activation = None
+        source_window.onInit()
+
+    def open_season(self, showid, seasonid):
+        return self._open_detail(
+            self.repository.build_season_detail,
+            'open_season',
+            showid,
+            seasonid,
+        )
+
+    def open_search(self, source_window=None):
+        if source_window is not None and source_window.screen_kind == 'search':
+            source_window.setFocusId(getattr(source_window, '_search_key_focus', 8000))
+            return True
+        # A TV keyboard belongs to our presentation, not Kodi's global dialog.
+        from .models import Screen
+        def empty_search():
+            screen = Screen(Screen.SEARCH, title='Buscar', screen_kind='search', layout='grid')
+            screen._cleanui_search_query = ''
+            return screen
+        return self._open_home_like(empty_search, 'open_search', 'search', source_window)
+
+    def _open_home_like(
+        self,
+        builder,
+        context,
+        screen_kind='home',
+        source_window=None,
+    ):
+        if (source_window and source_window.screen_kind == screen_kind
+                and screen_kind in ('movies', 'series')
+                and context in ('open_movies', 'open_series')):
+            return True
+        if self._windows:
+            return self.load_navigation(self._windows[-1], builder,
+                lambda screen: self._present_home_like(screen, context, screen_kind, source_window))
+        try:
+            return self._present_home_like(builder(), context, screen_kind, source_window)
+        except Exception:
+            self._show_error(context)
+            return False
+
+    def _present_home_like(self, screen, context, screen_kind='home', source_window=None):
+        try:
+            if not screen:
+                raise RuntimeError(
+                    'La API no devolvió contenido para la pantalla'
+                )
+
+            screen.screen_kind = screen_kind
+
+            # Reutilizar la ventana Home ya abierta en lugar de apilar un nuevo
+            # WindowXMLDialog: evita el crecimiento de ventanas (lag/doble
+            # interfaz en Chromecast). Se guarda el Screen actual en la pila
+            # para que BACK recargue la seccion anterior.
+            if source_window and source_window in self._windows:
+                if screen_kind == 'home' and context in ('home', 'open_root'):
+                    source_window._history.clear()
+                    if self._windows[0] is source_window:
+                        self._home_stack = source_window._history
+                    return source_window.replace_screen(screen, screen_kind)
+                if getattr(source_window, 'screen', None):
+                    source_window.capture_state()
+                    source_window._history.append((
+                        source_window.screen,
+                        source_window.screen_kind,
+                    ))
+                return source_window.replace_screen(
+                    screen,
+                    screen_kind,
+                )
+
+            window = HomeWindow(
+                'uihome.xml',
+                self.addon_path,
+                'Default',
+                '1080i',
+                controller=self,
+                screen=screen,
+                screen_kind=screen_kind,
+            )
+
+            self._show_window(window)
+            del window
+            return True
+
+        except Exception:
+            self._show_error(context)
+            return False
+
+    def open_movies(self, source_window=None):
+        xbmc.log(
+            '[CLEANUI] Abriendo Home de peliculas',
+            xbmc.LOGINFO,
+        )
+        return self._open_home_like(
+            self.repository.build_movies_home,
+            'open_movies',
+            screen_kind='movies',
+            source_window=source_window,
+        )
+
+    def open_series(self, source_window=None):
+        xbmc.log(
+            '[CLEANUI] Abriendo Home de series',
+            xbmc.LOGINFO,
+        )
+        return self._open_home_like(
+            self.repository.build_series_home,
+            'open_series',
+            screen_kind='series',
+            source_window=source_window,
+        )
+
+    def open_watchlist(self, source_window=None):
+        xbmc.log(
+            '[CLEANUI] Abriendo Mi lista dentro de Clean UI',
+            xbmc.LOGINFO,
+        )
+        return self._open_home_like(
+            self.repository.build_watchlist_screen,
+            'open_watchlist',
+            screen_kind='watchlist',
+            source_window=source_window,
+        )
+
+    def open_continue_watching(self, source_window=None):
+        xbmc.log(
+            '[CLEANUI] Abriendo Continuar viendo dentro de Clean UI',
+            xbmc.LOGINFO,
+        )
+        return self._open_home_like(
+            self.repository.build_continue_watching_screen,
+            'open_continue_watching',
+            screen_kind='continue_watching',
+            source_window=source_window,
+        )
+
+    def select_profile(self, source_window=None, profile=None):
+        """Open SlyGuy's profile selector and rebuild the current Home."""
+        if (self._selecting_profile or (self._navigation_loader is not None
+                                      and self._navigation_loader.active)):
+            xbmc.log(
+                '[CLEANUI] Selector de perfil ignorado porque ya está abierto',
+                xbmc.LOGINFO,
+            )
+            return False
+        root_window = self._windows[0] if self._windows else source_window
+        if (root_window is None or (self._windows and not isinstance(root_window, HomeWindow))
+                or not hasattr(root_window, 'replace_screen')):
+            return False
+        self._selecting_profile = True
+        profile_changed = False
+        try:
+            from slyguy import userdata
+            import resources.lib.plugin as core
+            if userdata.get('kid_lockdown', False):
+                return False
+            previous_profile_id = (userdata.get('profile') or {}).get('id', '')
+            xbmc.log(
+                '[CLEANUI] Abriendo selector de perfil; perfil actual={}'.format(
+                    previous_profile_id
+                ),
+                xbmc.LOGINFO,
+            )
+            from .profile_window import choose_profile
+            changed = (choose_profile(self.addon_path, profile=profile)
+                       if profile is not None else choose_profile(self.addon_path))
+            current_profile_id = (userdata.get('profile') or {}).get('id', '')
+            if changed is False:
+                xbmc.log(
+                    '[CLEANUI] Selección de perfil cancelada',
+                    xbmc.LOGINFO,
+                )
+                return False
+            if current_profile_id == previous_profile_id:
+                xbmc.log(
+                    '[CLEANUI] El perfil seleccionado no cambió',
+                    xbmc.LOGINFO,
+                )
+                return False
+            xbmc.log(
+                '[CLEANUI] Perfil cambiado: anterior={} nuevo={}'.format(
+                    previous_profile_id,
+                    current_profile_id,
+                ),
+                xbmc.LOGINFO,
+            )
+            # Las pantallas guardadas pertenecen al perfil anterior y no
+            # deben poder restaurarse mediante BACK.
+            from slyguy import mem_cache
+            mem_cache.empty()
+            # Un Repository nuevo evita conservar modelos o resultados
+            # visuales del perfil anterior. Las cachés válidas de red
+            # continúan gestionadas por API.
+            self.repository = Repository()
+            profile_changed = True
+            self._restored_stack = None
+            for window in self._windows:
+                history = getattr(window, '_history', None)
+                if history is not None:
+                    history.clear()
+                window._page_history = []
+            root_window._history = getattr(root_window, '_history', [])
+            root_window._history.clear()
+            root_window._page_history = []
+            self._home_stack = root_window._history
+            from .models import Screen
+            neutral = Screen(screen_type=Screen.HOME, title='HBO Max', hero=None,
+                             rails=[], screen_kind='home')
+            root_window.replace_screen(neutral, 'home')
+            for window in reversed(self._windows[1:]):
+                self.cancel_navigation(window)
+                window.close()
+            root_window._last_load = (self.repository.build_home,
+                                     lambda screen: root_window.replace_screen(screen, 'home'))
+            with gui.busy():
+                screen = self.repository.build_home()
+            if not screen or not root_window.replace_screen(screen, 'home'):
+                raise RuntimeError('No se pudo reconstruir Home para el nuevo perfil')
+            root_window._last_load = None
+            return True
+        except Exception:
+            self._show_error('select_profile')
+            if profile_changed:
+                root_window.setProperty('cleanui.load_error', 'true')
+                try:
+                    root_window.setFocusId(4980)
+                except (RuntimeError, SystemError):
+                    pass  # A closing child may not yet have returned native focus.
+            return False
+        finally:
+            self._selecting_profile = False
+
+    def open_collection(self, page_id, title, source_window=None):
+        xbmc.log(
+            '[CLEANUI] Abriendo industria: nombre={} page_id={}'.format(
+                title, page_id,
+            ),
+            xbmc.LOGINFO,
+        )
+        return self._open_home_like(lambda: self.repository.build_collection(page_id, title),
+                                    'open_collection', 'collection', source_window)
+
+    def open_next_page(self, card, source_window):
+        if self._windows:
+            return self.load_navigation(self._windows[-1], lambda: self.repository.build_next(card),
+                                        lambda screen: self._present_next_page(screen, source_window))
+        try:
+            return self._present_next_page(self.repository.build_next(card), source_window)
+        except Exception:
+            self._show_error('open_next_page')
+            return False
+
+    def _present_next_page(self, screen, source_window):
+        try:
+            if isinstance(source_window, HomeWindow):
+                source_window.capture_state()
+                source_window._history.append((source_window.screen, source_window.screen_kind))
+                return source_window.replace_screen(screen, screen.screen_kind)
+            # Replace paginated search/episode content in the existing dialog.
+            source_window.capture_state()
+            history = getattr(source_window, '_page_history', [])
+            history.append(source_window.screen)
+            source_window._page_history = history
+            source_window.screen = screen
+            source_window.onInit()
+            return True
+        except Exception:
+            self._show_error('open_next_page')
+            return False

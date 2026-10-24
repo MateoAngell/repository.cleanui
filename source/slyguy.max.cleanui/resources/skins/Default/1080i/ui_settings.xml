@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<window type="dialog" id="13009">
+  <defaultcontrol>6100</defaultcontrol>
+  <backgroundcolor>FF0B0C0D</backgroundcolor>
+  <controls>
+    <control type="image"><left>0</left><top>0</top><width>1920</width><height>1080</height><texture colordiffuse="FF0B0C0D">white.png</texture></control>
+    <control type="label"><left>130</left><top>83</top><width>1600</width><height>86</height><font>font52_title</font><label>Ajustes</label><textcolor>FFF5F5F7</textcolor><aligny>center</aligny></control>
+    <control type="list" id="6100">
+      <left>130</left><top>232</top><width>385</width><height>616</height><orientation>vertical</orientation><scrolltime>120</scrolltime>
+      <onleft>6100</onleft><onright>6200</onright><onup>6100</onup><ondown>6100</ondown><pagecontrol>0</pagecontrol>
+      <itemlayout width="385" height="88">
+        <control type="label"><left>24</left><top>0</top><width>340</width><height>80</height><font>font30</font><label>$INFO[ListItem.Label]</label><textcolor>FFC9C9CB</textcolor><aligny>center</aligny><scroll>false</scroll></control>
+      </itemlayout>
+      <focusedlayout width="385" height="88">
+        <control type="image"><left>0</left><top>0</top><width>385</width><height>80</height><texture colordiffuse="FFF5F5F7">white.png</texture></control>
+        <control type="label"><left>24</left><top>0</top><width>340</width><height>80</height><font>font30</font><label>$INFO[ListItem.Label]</label><textcolor>FF111214</textcolor><aligny>center</aligny><scroll>false</scroll></control>
+      </focusedlayout>
+    </control>
+    <control type="label"><left>604</left><top>232</top><width>1187</width><height>46</height><font>font30</font><label>$INFO[Window.Property(cleanui.settings.section)]</label><textcolor>FFF5F5F7</textcolor></control>
+    <control type="list" id="6200">
+      <left>604</left><top>288</top><width>1187</width><height>608</height><orientation>vertical</orientation><scrolltime>120</scrolltime>
+      <onleft>6100</onleft><onright>6200</onright><onup>6200</onup><ondown>6200</ondown><pagecontrol>0</pagecontrol>
+      <itemlayout width="1187" height="152">
+        <control type="image"><left>0</left><top>0</top><width>1187</width><height>140</height><texture colordiffuse="FF191919">white.png</texture></control>
+        <control type="label"><left>32</left><top>12</top><width>1090</width><height>68</height><font>font30</font><label>$INFO[ListItem.Label]</label><textcolor>FFF0F0F2</textcolor><aligny>center</aligny><scroll>true</scroll></control>
+        <control type="label"><left>32</left><top>86</top><width>1090</width><height>42</height><font>font24</font><label>$INFO[ListItem.Property(cleanui.settings.description)]</label><textcolor>FFB1B1B5</textcolor><scroll>false</scroll></control>
+        <control type="label"><left>1130</left><top>26</top><width>40</width><height>64</height><font>font30</font><label>$INFO[ListItem.Property(cleanui.settings.arrow)]</label><textcolor>FFDDDDDF</textcolor></control>
+      </itemlayout>
+      <focusedlayout width="1187" height="152">
+        <control type="image"><left>0</left><top>0</top><width>1187</width><height>140</height><texture colordiffuse="FFF5F5F7">white.png</texture></control>
+        <control type="label"><left>32</left><top>12</top><width>1090</width><height>68</height><font>font30</font><label>$INFO[ListItem.Label]</label><textcolor>FF111214</textcolor><aligny>center</aligny><scroll>true</scroll></control>
+        <control type="label"><left>32</left><top>86</top><width>1090</width><height>42</height><font>font24</font><label>$INFO[ListItem.Property(cleanui.settings.description)]</label><textcolor>FF48484B</textcolor><scroll>false</scroll></control>
+        <control type="label"><left>1130</left><top>26</top><width>40</width><height>64</height><font>font30</font><label>$INFO[ListItem.Property(cleanui.settings.arrow)]</label><textcolor>FF111214</textcolor></control>
+      </focusedlayout>
+    </control>
+    <control type="label"><left>604</left><top>352</top><width>1187</width><height>70</height><font>font30</font><label>No hay opciones disponibles en esta categoría.</label><textcolor>FFB1B1B5</textcolor><visible>String.IsEqual(Window.Property(cleanui.settings.empty),true)</visible></control>
+    <control type="label"><left>604</left><top>910</top><width>1187</width><height>40</height><font>font24</font><label>$INFO[Window.Property(cleanui.settings.path)]</label><textcolor>FFB1B1B5</textcolor></control>
+    <control type="textbox"><left>130</left><top>976</top><width>1661</width><height>66</height><font>font24</font><label>$INFO[Window.Property(cleanui.settings.account_notice)]</label><textcolor>FFB1B1B5</textcolor></control>
+  </controls>
+</window>
